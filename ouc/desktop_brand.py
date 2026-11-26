@@ -1,16 +1,15 @@
-"""Optional, dry-run-by-default asar text rewriter.
+"""Optional, dry-run-by-default asar text editor.
 
-Behavioral target: ``src/desktop_brand.py``.  Only specific strings inside an
-Electron archive are changed; every other byte stays where it was.  The rewrite
-refuses to touch an archive while the app is open or when Electron's asar
-integrity fuse is enabled, and stores the original header for byte-exact restore.
-
-This module is ToS-sensitive.  ``apply`` requires an explicit flag.
+Only specific strings inside an Electron archive are changed; every other byte
+stays where it was.  The editor refuses to touch an archive while the app is
+open or when Electron's asar integrity fuse is enabled, and stores the original
+header for byte-exact restore.  ``apply`` requires an explicit flag.
 """
 
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import struct
 from pathlib import Path
@@ -87,6 +86,23 @@ def node_at(header: dict, path: tuple[str, ...]) -> dict:
     return node
 
 
+def data_extent(header: dict, node: dict | None = None) -> int:
+    """Highest byte position used by any file entry in an archive header."""
+    node = header if node is None else node
+    end = 0
+    files = node.get("files") if isinstance(node, dict) else None
+    if not isinstance(files, dict):
+        return end
+    for entry in files.values():
+        if not isinstance(entry, dict) or entry.get("unpacked"):
+            continue
+        if "offset" in entry and "size" in entry:
+            end = max(end, int(entry["offset"]) + int(entry["size"]))
+        else:
+            end = max(end, data_extent(header, entry))
+    return end
+
+
 def entry_bytes(handle, start: int, entry: dict) -> bytes:
     if entry.get("unpacked"):
         raise ValueError("entry is unpacked")
@@ -114,7 +130,7 @@ def candidate_paths(header: dict) -> list[tuple[str, ...]]:
     return out
 
 
-def rewrite_text(text: str) -> tuple[str, list[str]]:
+def brand_text(text: str) -> tuple[str, list[str]]:
     labels = []
     for label, old, new in REWRITES:
         if old in text:
@@ -146,7 +162,7 @@ def status(archive: Path, *, app_open: bool | None = None) -> dict:
                 text = data.decode("utf-8", "replace")
                 if all(mark in text for mark in MARKS[:1]):
                     patched = True
-                _, labels = rewrite_text(text)
+                _, labels = brand_text(text)
                 result["would_change"].extend(f"{'/'.join(path)}: {label}" for label in labels)
             result["patched"] = patched
     except (ValueError, OSError, json.JSONDecodeError) as exc:
@@ -157,7 +173,7 @@ def status(archive: Path, *, app_open: bool | None = None) -> dict:
 
 
 def apply(archive: Path, *, apply_change: bool = False, app_open: bool = False) -> dict:
-    """Plan or apply the rewrite. Dry-run is the default."""
+    """Plan or apply the change. Dry-run is the default."""
     report = status(archive, app_open=app_open)
     if report["blockers"]:
         return report
@@ -172,6 +188,7 @@ def apply(archive: Path, *, apply_change: bool = False, app_open: bool = False) 
     original = archive.read_bytes()
     with archive.open("rb") as handle:
         header, start, _ = archive_header(handle)
+        original_data = original[start:]
         changes: dict[tuple[str, ...], bytes] = {}
         for path in candidate_paths(header):
             try:
@@ -180,7 +197,7 @@ def apply(archive: Path, *, apply_change: bool = False, app_open: bool = False) 
             except (KeyError, ValueError):
                 continue
             text = data.decode("utf-8", "replace")
-            new_text, labels = rewrite_text(text)
+            new_text, labels = brand_text(text)
             if labels:
                 changes[path] = new_text.encode("utf-8")
         if not changes:
@@ -188,15 +205,15 @@ def apply(archive: Path, *, apply_change: bool = False, app_open: bool = False) 
             return report
 
     new_header = json.loads(json.dumps(header))
-    payload = bytearray()
+    appended = bytearray()
     for path, data in changes.items():
         node = node_at(new_header, path)
-        node["offset"] = str(len(payload))
+        node["offset"] = str(len(original_data) + len(appended))
         node["size"] = len(data)
         if isinstance(node.get("integrity"), dict):
             node["integrity"] = checksum_block(data)
-        payload.extend(data)
-    rebuilt = prelude_bytes(new_header) + bytes(payload)
+        appended.extend(data)
+    rebuilt = prelude_bytes(new_header) + original_data + bytes(appended)
 
     temp = archive.with_name(archive.name + ".ouc-new")
     try:
@@ -210,7 +227,7 @@ def apply(archive: Path, *, apply_change: bool = False, app_open: bool = False) 
                     raise ValueError(f"read-back mismatch for {'/'.join(path)}")
         STATE_DIR.mkdir(parents=True, exist_ok=True)
         if not HEADER_COPY.is_file():
-            HEADER_COPY.write_bytes(original[: archive_header(archive.open("rb"))[1]])
+            HEADER_COPY.write_bytes(original[:start])
         temp.replace(archive)
         report["applied"] = sorted("/".join(p) for p in changes)
         note(f"patched {archive}: {', '.join(sorted(set(x.split(': ')[-1] for x in report['would_change'])))}")
@@ -229,10 +246,12 @@ def restore(archive: Path) -> dict:
     if not archive.is_file():
         return {"ok": False, "error": "archive not found"}
     header_copy = HEADER_COPY.read_bytes()
+    saved_header, _saved_start, _ = archive_header(io.BytesIO(header_copy))
+    keep = data_extent(saved_header)
     with archive.open("rb") as handle:
         _header, data_start, _ = archive_header(handle)
         handle.seek(data_start)
-        data = handle.read()
+        data = handle.read(keep)
     temp = archive.with_name(archive.name + ".ouc-restore")
     temp.write_bytes(header_copy + data)
     with temp.open("rb") as check:

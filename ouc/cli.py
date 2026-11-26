@@ -1,8 +1,8 @@
-"""Unified command-line entry point for the rewrite.
+"""Unified command-line entry point.
 
-Maps the reference's separate scripts (zen-hop, zen-lane, doctor, keeper, guard,
-watchdog, desktop_brand) onto ``python -m ouc.cli <command>``.  No command
-registers a service, edits a firewall, or runs a remote installer.
+Commands cover hopping, lane setup, health checks, keepers, a dashboard, and
+archive editing.  No command registers a service, edits a firewall, or runs a
+remote installer.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from . import auto_resume, common, desktop_brand, proxy_chain, workers, zen_prox
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="ouc", description="Opencode Unlimited — clean rewrite")
+    parser = argparse.ArgumentParser(prog="ouc", description="Opencode Unlimited")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("doctor", help="print local health information")
@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     brand = sub.add_parser("desktop-brand", help="dry-run by default; --apply requires explicit consent")
     brand.add_argument("action", choices=["status", "apply", "restore"])
     brand.add_argument("--install", default="")
-    brand.add_argument("--apply", action="store_true", help="actually rewrite the archive")
+    brand.add_argument("--apply", action="store_true", help="apply the change to the archive")
 
     resume = sub.add_parser("resume", help="opt-in session resume helper")
     resume.add_argument("--enable", choices=["on", "off"])
@@ -73,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
             "guard_heartbeat_age": common.heartbeat_age(workers.GUARD_HEARTBEAT),
             "keeper_heartbeat_age": common.heartbeat_age(workers.KEEPER_HEARTBEAT),
             "auto_resume": auto_resume.is_auto_resume_enabled(),
-            "note": "This rewrite never installs services, sudoers rules, or firewall rules.",
+            "note": "This tool never installs services, sudoers rules, or firewall rules.",
         }, indent=2))
         return 0
 

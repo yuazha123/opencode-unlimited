@@ -1,8 +1,6 @@
-"""Small stdlib dashboard with the same control concepts as the reference UI.
+"""Small standard-library dashboard served over loopback HTTP with a JSON API.
 
-Behavioral target: ``src/avatar_ui.py`` + ``src/ui/index.html``.  The reference
-uses WebView2/pywebview; this rewrite serves the same control ids over loopback
-HTTP with a JSON API.  No service, autostart, or remote access is configured.
+No service, autostart, or remote access is configured.
 """
 
 from __future__ import annotations
@@ -16,11 +14,11 @@ from urllib.parse import urlsplit
 from . import auto_resume, common, desktop_brand, proxy_chain, workers, zen_proxy
 
 PAGE = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Opencode Unlimited (rewrite)</title>
+<html lang="en"><head><meta charset="utf-8"><title>Opencode Unlimited</title>
 <style>body{font:14px system-ui;background:#11151c;color:#e6edf3;margin:0;padding:24px}
 button{background:#238636;color:#fff;border:0;border-radius:6px;padding:8px 12px;cursor:pointer}
 pre{background:#0b0f14;padding:12px;border-radius:6px;overflow:auto}label{margin-right:16px}</style></head>
-<body><h1>Opencode Unlimited — clean rewrite</h1>
+<body><h1>Opencode Unlimited</h1>
 <p id="status">Loading…</p>
 <label>Egress mode <select id="mode"><option>warp</option><option>tor</option>
 <option>custom</option><option>clean</option></select></label>
@@ -76,7 +74,7 @@ class DashboardApi:
             zen_proxy.record_event("repair", "route repair requested")
             return {"ok": True}
         if issue_id == "worker-restart":
-            return {"ok": False, "message": "automatic service install is disabled in the rewrite"}
+            return {"ok": False, "message": "automatic service install is disabled"}
         return {"ok": False, "message": "unknown issue"}
 
     def set_egress_mode(self, mode: str) -> dict:

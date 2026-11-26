@@ -1,7 +1,7 @@
-"""WarpGate control-plane client and SOCKS5 dialer (clean rewrite).
+"""WarpGate control-plane client and SOCKS5 dialer.
 
-Behavioral target: ``relay/warpgate_pool.py``.  Every control call and socket
-creation is injectable, so no test talks to a real WarpGate or WARP exit.
+Control calls and socket creation are injectable, so no test talks to a real
+WarpGate or WARP exit.
 """
 
 from __future__ import annotations

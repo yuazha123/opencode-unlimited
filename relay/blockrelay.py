@@ -1,9 +1,8 @@
-"""Authenticated CONNECT relay with sticky IPv6 /64 blocks (clean rewrite).
+"""Authenticated CONNECT relay with sticky IPv6 /64 blocks.
 
-Behavioral target: ``relay/blockrelay.py``.  The relay is blind: it never
-terminates TLS and never edits a request.  Clients authenticate with a token;
-blocks are sticky per client and rotated on demand.  All outbound dialing and
-clock reads are injectable, so tests never open a live connection.
+The relay is blind: it never terminates TLS and never edits a request.  Clients
+authenticate with a token; blocks are sticky per client and rotated on demand.
+Outbound dialing and clock reads are injectable.
 """
 
 from __future__ import annotations
@@ -318,25 +317,47 @@ class Router:
         dial: Callable | None = None,
         pool: WarpGatePool | None = None,
         clock: Callable[[], int] | None = None,
+        probe: Callable[[Instance], str] | None = None,
     ) -> None:
         self.cfg = cfg
         self.store = store
         self.dial = dial
         self.pool = pool if pool is not None else (cfg.pool() if cfg.uses_warpgate else None)
         self.clock = clock or (lambda: int(time.time()))
+        self.probe = probe or self._default_probe
+        self._instances: dict[str, Instance] = {}
+
+    @staticmethod
+    def _default_probe(instance: Instance) -> str:
+        try:
+            sock = warpgate_pool.socks5_connect("www.cloudflare.com", 80, instance.host, instance.port,
+                                               instance.username, instance.password)
+            return warpgate_pool.probe_egress(sock)
+        except Exception:
+            return ""
 
     def _free_prefix_block(self) -> str:
         used = self.store.used_blocks() | self.store.assigned_blocks()
         for net in self.cfg.blocks:
-            for addr in net.iter_hosts():
-                block = str(ipaddress.IPv6Network(f"{addr}/{BLOCK_PREFIX}", strict=False).network_address)
+            for block_net in net.subnets(new_prefix=BLOCK_PREFIX):
+                block = str(block_net.network_address)
                 if block not in used:
                     return block
         raise NoCapacity("no unspent /64 in the routed prefix")
 
     def ensure(self, client) -> Route:
-        lane = self.cfg.upstream_mode
-        if lane == "warpgate":
+        existing = str(client["block"] or "")
+        if existing and existing not in self.store.used_blocks():
+            lane = str(client["lane"] or self.cfg.upstream_mode)
+            if lane == "warpgate":
+                instance = self._instances.get(existing)
+                if instance is not None:
+                    return Route(existing, lane, instance=instance,
+                                 exit_ip=self.store.get_setting(f"exit:{existing}"))
+            else:
+                return Route(existing, lane)
+
+        if self.cfg.upstream_mode == "warpgate":
             route = self._warpgate_route(client)
         elif self.cfg.uses_prefix:
             route = Route(self._free_prefix_block(), "prefix")
@@ -345,6 +366,10 @@ class Router:
         else:
             raise NoCapacity("no egress lane configured")
         self.store.assign(str(client["id"]), route.block, route.lane)
+        if route.instance is not None:
+            self._instances[route.block] = route.instance
+        if route.exit_ip:
+            self.store.set_setting(f"exit:{route.block}", route.exit_ip)
         return route
 
     def _warpgate_route(self, client) -> Route:
@@ -353,13 +378,7 @@ class Router:
         instance = self.pool.acquire(str(client["id"]))
         if instance is None:
             raise NoCapacity("WarpGate has no free instance")
-        exit_ip = ""
-        try:
-            sock = warpgate_pool.socks5_connect("www.cloudflare.com", 80, instance.host, instance.port,
-                                               instance.username, instance.password)
-            exit_ip = warpgate_pool.probe_egress(sock)
-        except Exception:
-            pass
+        exit_ip = self.probe(instance)
         block = block_of(exit_ip) or block_of(instance.advertised_ip)
         if not block:
             raise NoCapacity("could not determine the WarpGate egress block")
@@ -369,6 +388,7 @@ class Router:
         old = str(client["block"] or "")
         if old:
             self.store.mark_burnt(old)
+            self._instances.pop(old, None)
         return self.ensure(client)
 
     async def open_connection(self, host: str, port: int, route: Route):

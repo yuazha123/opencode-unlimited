@@ -1,8 +1,8 @@
 """Local HTTP CONNECT proxy with a bounded health-event trail.
 
-Behavioral target: ``src/zen_proxy.py``.  The reference is unbuffered, uses
-TCP_NODELAY/keepalive, counts live tunnels, and distinguishes a failed route
-from a reset after response bytes started (``stream_reset``).
+The relay is unbuffered, uses TCP_NODELAY/keepalive, counts live tunnels, and
+distinguishes a failed route from a reset after response bytes started
+(``stream_reset``).
 """
 
 from __future__ import annotations

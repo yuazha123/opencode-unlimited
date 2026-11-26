@@ -1,9 +1,7 @@
 """Opt-in session unlock and resume helpers.
 
-Behavioral target: ``src/auto_resume.py``.  The reference enables this by default;
-the rewrite requires an explicit flag because it mutates a third-party app's
-local database and can inject keystrokes.  All process dispatch goes through an
-injectable runner, so tests never send input to a real window.
+This feature requires an explicit flag because it mutates a local application
+database.  All process dispatch goes through an injectable runner.
 """
 
 from __future__ import annotations
@@ -28,7 +26,7 @@ SESSION_ID_RE = re.compile(r"\bsessionID=(ses_[A-Za-z0-9]+)")
 
 
 def is_auto_resume_enabled() -> bool:
-    """Default off in the rewrite (the reference defaults on)."""
+    """Disabled unless explicitly enabled."""
     try:
         return AUTO_RESUME_FLAG.read_text(encoding="utf-8").strip() == "1"
     except OSError:

@@ -1,8 +1,7 @@
 """Background-worker logic: wall detection, rotation backoff, and liveness.
 
-Behavioral target: ``zen_guard.py``, ``warp_keeper.py``, ``ouc_watchdog.py``.
-The reference registers these as OS services; the rewrite exposes one-shot
-entry points and never installs or enables a service.
+Workers are exposed as one-shot entry points and never install or enable an
+operating-system service.
 """
 
 from __future__ import annotations

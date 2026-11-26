@@ -1,8 +1,8 @@
 """Multi-egress proxy router: WARP, Tor, custom SOCKS5/HTTP, and block relays.
 
-Behavioral target: ``src/proxy_chain.py``.  The reference's ``relay://`` entry is
-an authenticated CONNECT tunnel that hides TLS; only the source address changes.
-All outbound sockets are created through injectable factories in tests.
+A ``relay://`` entry points at an authenticated CONNECT tunnel that hides TLS;
+only the source address changes.  Outbound sockets are created through
+injectable factories in tests.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
-"""Shared paths, state helpers, and network utilities for the rewrite.
+"""Shared paths, state helpers, and network utilities.
 
-Behavioral target: ``src/ouc_common.py`` of the reference repository.  External
-processes and network access are injectable so tests never touch a live host.
+External processes and network access are injectable so tests never touch a
+live host.
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ def read_json(path: Path, default=None):
 
 
 def write_json(path: Path, value, *, indent: int | None = None) -> None:
-    """Atomic JSON write; the reference uses the same tmp+replace pattern."""
+    """Atomic JSON write using a temporary file and rename."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(value, indent=indent, separators=(",", ":") if indent is None else None), encoding="utf-8")
@@ -98,7 +98,7 @@ def service_proxy_wired(port: int | None = None) -> bool:
 
 
 def append_log(path: Path, message: str, *, limit_bytes: int = 1_000_000) -> None:
-    """Timestamped append with one-backup rotation (mirrors reference behavior)."""
+    """Timestamped append with one-backup rotation."""
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

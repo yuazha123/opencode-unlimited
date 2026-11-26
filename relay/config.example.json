@@ -1,0 +1,35 @@
+{
+  "listen": "127.0.0.1",
+  "port": 4443,
+  "database": "relay.db",
+  "prefixes": [
+    "2001:db8:1234::/48"
+  ],
+  "bind_suffix": "::1",
+  "allowed_hosts": [
+    "*"
+  ],
+  "admin_token": "CHANGE-ME-admin-token",
+  "enroll_secret": "CHANGE-ME-enrollment-secret",
+  "max_tunnels_per_client": 8,
+  "idle_timeout": 300,
+  "connect_timeout": 15,
+  "tls": {
+    "cert": "",
+    "key": ""
+  },
+  "public_url": "relay.example.com:4443",
+  "upstream": {
+    "mode": "prefix",
+    "warpgate": {
+      "url": "",
+      "proxy_host": "",
+      "username": "CHANGE-ME-socks-user",
+      "password": "CHANGE-ME-socks-pass",
+      "api_key": "",
+      "sticky_minutes": 1440,
+      "verify_tls": true,
+      "timeout": 10
+    }
+  }
+}
